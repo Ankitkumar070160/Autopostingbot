@@ -2,6 +2,11 @@ import tweepy
 from googleapiclient.discovery import build
 import facebook
 from instabot import Bot
+from telegram import Update
+from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
+
+# Telegram API token (replace 'your_telegram_token' with your actual token)
+telegram_token = 'your_telegram_token'
 
 # Twitter API credentials
 twitter_api_key = 'your_api_key'
@@ -19,8 +24,6 @@ facebook_access_token = 'your_access_token'
 # Instagram credentials
 instagram_username = 'your_instagram_username'
 instagram_password = 'your_instagram_password'
-
-#This Is Code is created by Mr Tanit so plz give me credits in your social media 
 
 # TikTok credentials (unofficial)
 tiktok_username = 'your_tiktok_username'
@@ -46,17 +49,47 @@ muvi_api_key = 'your_muvi_api_key'
 muvi_username = 'your_muvi_username'
 muvi_password = 'your_muvi_password'
 
+def add_credit(description):
+    return f'{description}\n\nMr Tanit - Subscribe for more content!'
+
 def post_to_twitter(video_path, tweet_text, video_title):
-    # ... (same as before)
+    auth = tweepy.OAuthHandler(twitter_api_key, twitter_api_secret)
+    auth.set_access_token(twitter_access_token, twitter_access_secret)
+    api = tweepy.API(auth)
+
+    media = api.media_upload(video_path)
+    api.update_status(status=tweet_text, media_ids=[media.media_id])
 
 def upload_to_youtube(video_path, video_title, video_description, video_tags):
-    # ... (same as before)
+    youtube = build('youtube', 'v3', developerKey=youtube_api_key)
+    
+    request = youtube.videos().insert(
+        part="snippet,status",
+        body={
+          "snippet": {
+            "categoryId": "22",
+            "title": video_title,
+            "description": add_credit(video_description),
+            "tags": video_tags
+          },
+          "status": {
+            "privacyStatus": "public"
+          }
+        },
+        media_body=video_path
+    )
+    response = request.execute()
+    print(f'Video uploaded to YouTube with ID: {response["id"]}')
 
 def post_to_facebook(video_path, message, video_title):
-    # ... (same as before)
+    graph = facebook.GraphAPI(access_token=facebook_access_token, version="3.0")
+    with open(video_path, "rb") as video_file:
+        graph.put_video(file=video_file, title=video_title, description=add_credit(message))
 
 def post_to_instagram(video_path, caption, tags):
-    # ... (same as before)
+    bot = Bot()
+    bot.login(username=instagram_username, password=instagram_password)
+    bot.upload_video(video_path, caption=add_credit(f"{caption}\n{tags}"))
 
 def post_to_tiktok(video_path, caption):
     # TikTok automation is unofficial and may violate TikTok's terms of service.
@@ -78,32 +111,56 @@ def post_to_muvi(video_path, title, description):
     # Implement Muvi API integration using the provided credentials.
     # Refer to Muvi API documentation for details.
 
-# Example usage
-video_path = 'path/to/your/video.mp4'
-tweet_text = 'Check out my new video! #NewVideo #YouTube'
-video_title = 'My Awesome Video'
-video_description = 'Watch this amazing video I created.'
-video_tags = ['tag1', 'tag2', 'tag3']
-facebook_message = 'Check out my new video on Facebook!'
-instagram_caption = 'New video alert! Check it out.'
-instagram_tags = '#tag1 #tag2 #tag3'
-tiktok_caption = 'Watch my video on TikTok!'
-twitch_title = 'Live on Twitch!'
-twitch_description = 'Join me on my Twitch stream!'
-dailymotion_title = 'Dailymotion Upload'
-dailymotion_description = 'Check out my video on Dailymotion!'
-dailymotion_tags = ['tag1', 'tag2', 'tag3']
-uscreen_title = 'Video on Uscreen'
-uscreen_description = 'Discover my content on Uscreen!'
-muvi_title = 'Muvi Video'
-muvi_description = 'Explore my Muvi content!'
+def upload_video_to_all_platforms(video_path, video_title, video_description, video_tags, message, caption, tags):
+    description_with_credit = add_credit(video_description)
 
-post_to_twitter(video_path, tweet_text, video_title)
-upload_to_youtube(video_path, video_title, video_description, video_tags)
-post_to_facebook(video_path, facebook_message, video_title)
-post_to_instagram(video_path, f"{instagram_caption}\n{instagram_tags}", instagram_tags)
-post_to_tiktok(video_path, tiktok_caption)
-post_to_twitch(video_path, twitch_title, twitch_description)
-upload_to_dailymotion(video_path, dailymotion_title, dailymotion_description, dailymotion_tags)
-post_to_uscreen(video_path, uscreen_title, uscreen_description)
-post_to_muvi(video_path, muvi_title, muvi_description)
+    # Call platform-specific functions
+    post_to_twitter(video_path, f'{message} {tags} Mr Tanit', video_title)
+    upload_to_youtube(video_path, video_title, description_with_credit, video_tags)
+    post_to_facebook(video_path, f'{message} {tags} Mr Tanit', video_title)
+    post_to_instagram(video_path, f"{caption}\n{tags} #MrTanit", tags)
+    post_to_tiktok(video_path, f'{caption} {tags} #MrTanit')
+    post_to_twitch(video_path, f'{video_title} - Mr Tanit', f'{description_with_credit}')
+    upload_to_dailymotion(video_path, video_title, description_with_credit, video_tags)
+    post_to_uscreen(video_path, f'{video_title} - Mr Tanit', description_with_credit)
+    post_to_muvi(video_path, f'{video_title} - Mr Tanit', description_with_credit)
+
+def start(update: Update, context: CallbackContext) -> None:
+    update.message.reply_text('Welcome! Send me a video, and I will share it on multiple platforms.')
+
+def handle_video(update: Update, context: CallbackContext) -> None:
+    video_file = update.message.video.file_id
+    video_path = f'tmp/{video_file}.mp4'  # Adjust the path as needed
+
+    # Download the video
+    video = context.bot.get_file(video_file)
+    video.download(video_path)
+
+    # Your video processing logic
+    video_title = 'My Awesome Video'
+    video_description = 'Watch this amazing video I created.'
+    video_tags = ['tag1', 'tag2', 'tag3']
+    message = 'Check out my new video!'
+    caption = 'New video alert! Check it out.'
+    tags = '#tag1 #tag2 #tag3'
+
+    # Call the function to upload to all platforms
+    upload_video_to_all_platforms(video_path, video_title, video_description, video_tags, message, caption, tags)
+
+    update.message.reply_text('Your video has been shared on multiple platforms!')
+
+def main() -> None:
+    updater = Updater(telegram_token)
+    dispatcher = updater.dispatcher
+
+    # Command handlers
+    dispatcher.add_handler(CommandHandler("start", start))
+
+    # Message handler for videos
+    dispatcher.add_handler(MessageHandler(Filters.video, handle_video))
+
+    updater.start_polling()
+    updater.idle()
+
+if __name__ == '__main__':
+    main()
