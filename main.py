@@ -6,7 +6,7 @@ from telegram import Update
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters, CallbackContext
 
 # Telegram API token (replace 'your_telegram_token' with your actual token)
-telegram_token = 'your_telegram_token'
+telegram_token = '6976301677:AAF5aOn4eQJZhFVji8UYXv5g7MyfyyVKnkw'
 
 # Twitter API credentials
 twitter_api_key = 'your_api_key'
